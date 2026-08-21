@@ -1,0 +1,8 @@
+# gamification/apps.py
+from django.apps import AppConfig
+
+class GamificationConfig(AppConfig):
+    name = 'gamification'
+
+    def ready(self):
+        import gamification.signals

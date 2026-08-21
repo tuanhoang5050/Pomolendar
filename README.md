@@ -1,2 +1,0 @@
-# Pomolendar
-Pomolendar Focus app
