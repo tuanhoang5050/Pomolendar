@@ -8,7 +8,7 @@ export default function WheelPicker({ items, selectedValue, onValueChange }) {
 
   return (
     <View style={{ height: ITEM_HEIGHT * 3, width: 48 }}>
-      <View style={{ position: 'absolute', top: ITEM_HEIGHT, left: 0, right: 0, height: ITEM_HEIGHT, backgroundColor: '#008b8c15', borderRadius: 8 }} />
+      <View style={{ position: 'absolute', top: ITEM_HEIGHT, left: 0, right: 0, height: ITEM_HEIGHT, backgroundColor: '#ce9d7d15', borderRadius: 8 }} />
       <Animated.FlatList
         data={items}
         keyExtractor={(item) => item.toString()}
@@ -36,7 +36,7 @@ export default function WheelPicker({ items, selectedValue, onValueChange }) {
 
           return (
             <Animated.View style={{ height: ITEM_HEIGHT, justifyContent: 'center', alignItems: 'center', transform: [{ scale }], opacity }}>
-              <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#008b8c' }}>{item}</Text>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#ce9d7d' }}>{item}</Text>
             </Animated.View>
           );
         }}

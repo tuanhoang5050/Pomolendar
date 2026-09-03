@@ -5,6 +5,8 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import api from '../services/api';
+import { scheduleTaskReminder } from '../services/notifications';
+
 
 const { height } = Dimensions.get('window');
 
@@ -121,24 +123,21 @@ export default function AddTaskScreen({ navigation }) {
       };
 
       if (deadline) taskData.deadline = deadline;
-      
-      let finalReminder = null;
-      if (deadline && tempReminderQuick) {
-         const d = new Date(deadline);
-         if (tempReminderQuick === '5 min') {
-            d.setMinutes(d.getMinutes() - 5);
-         } else if (tempReminderQuick === '10 min') {
-            d.setMinutes(d.getMinutes() - 10);
-         }
-         finalReminder = d.toISOString();
-      }
-      
-      if (finalReminder) taskData.reminder = finalReminder;
+      if (reminder) taskData.reminder = reminder;
 
-      await api.post('/planner/tasks/', taskData);
+      const response = await api.post('/planner/tasks/', taskData);
 
-      setIsSubmitting(false);
-      navigation.goBack();
+if (taskData.reminder) {
+  await scheduleTaskReminder({
+    id: response.data.id,
+    title: taskData.title,
+    reminder: taskData.reminder,
+    is_completed: false
+  });
+}
+
+setIsSubmitting(false);
+navigation.goBack();
     } catch (error) {
       setIsSubmitting(false);
     }

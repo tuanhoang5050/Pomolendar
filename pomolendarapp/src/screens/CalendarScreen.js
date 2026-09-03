@@ -1,14 +1,18 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { 
-  View, Text, TouchableOpacity, SafeAreaView, ScrollView, Animated, Dimensions, 
-  TouchableWithoutFeedback, StyleSheet, ActivityIndicator, PanResponder, TextInput, KeyboardAvoidingView, Platform,
-  LayoutAnimation, UIManager, Alert
+  View, Text, TouchableOpacity, SafeAreaView, ScrollView, Animated, Dimensions, Easing,
+  TouchableWithoutFeedback, StyleSheet, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform,
+  UIManager, Alert
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import api from '../services/api';
 import CustomDrawer from '../components/CustomDrawer';
+import QuickCreateTaskPopup from '../components/QuickCreateTaskPopup';
+import AutoSchedulePopup from '../components/AutoSchedulePopup';
+import DraggableTask from '../components/DraggableTask';
+import DraggableEvent from '../components/DraggableEvent';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -20,6 +24,7 @@ const START_HOUR = 0;
 const RIGHT_DRAWER_WIDTH = width * 0.65;
 const LEFT_DRAWER_WIDTH = width * 0.55; 
 const SNAP_MINUTES = 5;
+const WEEK_ROW_HEIGHT = 36; // Hằng số cho chiều cao 1 tuần (32px + 4px margin)
 
 const ITEM_HEIGHT = 32;
 const HOURS = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
@@ -70,365 +75,20 @@ const filterOptions = [
   { label: 'Tasks', icon: 'checklist' }
 ];
 
-const DraggableTask = ({ item, baseTop, baseHeight, onDragStart, onDragEnd, onPlay, onRemove, scrollViewRef, scrollYRef }) => {
-  const pan = useRef(new Animated.ValueXY({ x: 0, y: baseTop })).current;
-  const [isDragging, setIsDragging] = useState(false);
-  const [showDelete, setShowDelete] = useState(false);
-  const autoScrollTimer = useRef(null);
-  const longPressTimer = useRef(null);
-  const currentDy = useRef(0);
-  const dragStartScrollY = useRef(0);
-
-  const latestProps = useRef({ item, onDragStart, onDragEnd, onRemove });
-  useEffect(() => {
-    latestProps.current = { item, onDragStart, onDragEnd, onRemove };
-  }, [item, onDragStart, onDragEnd, onRemove]);
-
-  useEffect(() => {
-    let hideTimer;
-    if (showDelete) {
-      hideTimer = setTimeout(() => setShowDelete(false), 3500);
-    }
-    return () => clearTimeout(hideTimer);
-  }, [showDelete]);
-
-  const stopAutoScroll = () => {
-    if (autoScrollTimer.current) {
-      clearInterval(autoScrollTimer.current);
-      autoScrollTimer.current = null;
-    }
-  };
-
-  useEffect(() => {
-    if (!isDragging) {
-      Animated.timing(pan.y, { toValue: baseTop, duration: 150, useNativeDriver: false }).start();
-    }
-  }, [baseTop, isDragging]);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true, 
-      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 5,
-      
-      onPanResponderGrant: () => {
-        setIsDragging(true);
-        dragStartScrollY.current = scrollYRef.current;
-        currentDy.current = 0;
-        latestProps.current.onDragStart(); 
-        pan.setOffset({ x: 0, y: pan.y._value });
-        pan.setValue({ x: 0, y: 0 });
-
-        longPressTimer.current = setTimeout(() => {
-          setShowDelete(true);
-        }, 1000);
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (Math.abs(gestureState.dy) > 5 || Math.abs(gestureState.dx) > 5) {
-          if (longPressTimer.current) {
-            clearTimeout(longPressTimer.current);
-            longPressTimer.current = null;
-          }
-          setShowDelete(false);
-        }
-
-        currentDy.current = gestureState.dy;
-        const scrollComp = scrollYRef.current - dragStartScrollY.current;
-        pan.setValue({ x: 0, y: currentDy.current + scrollComp });
-
-        const moveY = gestureState.moveY;
-        const topBoundary = 280;
-        const bottomBoundary = height - 180;
-        const scrollSpeed = 5;
-
-        if (moveY < topBoundary) {
-          if (!autoScrollTimer.current) {
-            autoScrollTimer.current = setInterval(() => {
-              if (scrollYRef.current > 0) {
-                scrollYRef.current = Math.max(0, scrollYRef.current - scrollSpeed);
-                scrollViewRef.current?.scrollTo({ y: scrollYRef.current, animated: false });
-                const newScrollComp = scrollYRef.current - dragStartScrollY.current;
-                pan.setValue({ x: 0, y: currentDy.current + newScrollComp });
-              }
-            }, 16);
-          }
-        } else if (moveY > bottomBoundary) {
-          if (!autoScrollTimer.current) {
-            autoScrollTimer.current = setInterval(() => {
-              scrollYRef.current += scrollSpeed;
-              scrollViewRef.current?.scrollTo({ y: scrollYRef.current, animated: false });
-              const newScrollComp = scrollYRef.current - dragStartScrollY.current;
-              pan.setValue({ x: 0, y: currentDy.current + newScrollComp });
-            }, 16);
-          }
-        } else {
-          stopAutoScroll();
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => { 
-        if (longPressTimer.current) clearTimeout(longPressTimer.current);
-        stopAutoScroll(); 
-        pan.flattenOffset(); 
-        setIsDragging(false); 
-        latestProps.current.onDragEnd(latestProps.current.item, pan.y._value); 
-      },
-      onPanResponderTerminate: () => { 
-        if (longPressTimer.current) clearTimeout(longPressTimer.current);
-        stopAutoScroll(); 
-        pan.flattenOffset(); 
-        setIsDragging(false); 
-        latestProps.current.onDragEnd(latestProps.current.item, pan.y._value); 
-      }
-    })
-  ).current;
-
-  const bgColor = item.is_completed ? '#e4e2e280' : '#c89d7d';
-  const borderColor = item.is_completed ? '#e4e2e2' : 'transparent';
-  const lineColor = item.is_completed ? '#8e706b' : '#a67d60';
-  const textColor = item.is_completed ? '#5a413c' : '#ffffff';
-
-  const isTooShort = baseHeight < 45;
-
-  return (
-    <Animated.View 
-      {...(!item.is_completed ? panResponder.panHandlers : {})}
-      style={{ 
-        position: 'absolute', top: 0, left: 64, right: 8, height: baseHeight - 4, 
-        backgroundColor: bgColor, borderRadius: 8, borderWidth: 1, borderColor, 
-        overflow: isTooShort ? 'visible' : 'hidden', zIndex: isDragging ? 50 : 10,
-        transform: [{ translateY: pan.y }, { scale: isDragging ? 1.02 : 1 }],
-        shadowColor: '#000', shadowOffset: { width: 0, height: isDragging ? 6 : 2 }, 
-        shadowOpacity: isDragging ? 0.2 : 0.1, shadowRadius: isDragging ? 8 : 4, elevation: isDragging ? 8 : 3 
-      }}
-    >
-      <View className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg" style={{ backgroundColor: lineColor }} />
-      <View className="flex-1 p-2 flex-col justify-between">
-        <View style={{ paddingRight: isTooShort ? 60 : 0 }}>
-          <Text className={`text-[14px] font-bold ${item.is_completed ? 'line-through' : ''}`} style={{ color: textColor }} numberOfLines={1}>{item.title}</Text>
-        </View>
-        {!isTooShort && (
-          <View className="flex-row items-center justify-between mt-1">
-            <View className="bg-[#ffffff40] px-2 py-0.5 rounded flex-row items-center">
-              <MaterialIcons name="drag-handle" size={10} color={textColor} style={{ marginRight: 2 }}/>
-              <Text className="text-[10px] font-bold" style={{ color: textColor }}>{item.estimated_pomodoros} Pomo</Text>
-            </View>
-            <View className="flex-row items-center gap-2">
-              {showDelete && (
-                <TouchableOpacity 
-                  className="w-7 h-7 rounded-full items-center justify-center bg-[#ba1a1a] shadow-sm"
-                  onPress={() => latestProps.current.onRemove(item)}
-                >
-                  <MaterialIcons name="delete-outline" size={16} color="#ffffff" />
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity 
-                className={`w-7 h-7 rounded-full items-center justify-center ${item.is_completed ? 'bg-transparent' : 'bg-[#a67d60] shadow-sm'}`} 
-                disabled={item.is_completed} onPress={() => onPlay(item.task_id)}
-              >
-                <MaterialIcons name={item.is_completed ? "check" : "play-arrow"} size={16} color={item.is_completed ? "#8e706b" : "#ffffff"} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-      </View>
-
-      {isTooShort && (
-        <View style={{ position: 'absolute', top: 4, right: 4, flexDirection: 'row', gap: 6, zIndex: 100 }}>
-          {showDelete && (
-            <TouchableOpacity 
-              className="w-6 h-6 rounded-full items-center justify-center bg-[#ba1a1a] shadow-sm"
-              onPress={() => latestProps.current.onRemove(item)}
-            >
-              <MaterialIcons name="delete-outline" size={14} color="#ffffff" />
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity 
-            className={`mr-1 w-6 h-6 rounded-full items-center justify-center ${item.is_completed ? 'bg-[#e4e2e2]' : 'bg-[#a67d60] shadow-sm'}`} 
-            disabled={item.is_completed} onPress={() => onPlay(item.task_id)}
-          >
-            <MaterialIcons name={item.is_completed ? "check" : "play-arrow"} size={14} color={item.is_completed ? "#8e706b" : "#ffffff"} />
-          </TouchableOpacity>
-        </View>
-      )}
-    </Animated.View>
-  );
-};
-
-const DraggableEvent = ({ item, baseTop, baseHeight, onDragStart, onDragEnd, onRemove, scrollViewRef, scrollYRef }) => {
-  const pan = useRef(new Animated.ValueXY({ x: 0, y: baseTop })).current;
-  const [isDragging, setIsDragging] = useState(false);
-  const [showDelete, setShowDelete] = useState(false);
-  const autoScrollTimer = useRef(null);
-  const longPressTimer = useRef(null);
-  const currentDy = useRef(0);
-  const dragStartScrollY = useRef(0);
-
-  const latestProps = useRef({ item, onDragStart, onDragEnd, onRemove });
-  useEffect(() => {
-    latestProps.current = { item, onDragStart, onDragEnd, onRemove };
-  }, [item, onDragStart, onDragEnd, onRemove]);
-
-  useEffect(() => {
-    let hideTimer;
-    if (showDelete) {
-      hideTimer = setTimeout(() => setShowDelete(false), 3500);
-    }
-    return () => clearTimeout(hideTimer);
-  }, [showDelete]);
-
-  const stopAutoScroll = () => {
-    if (autoScrollTimer.current) {
-      clearInterval(autoScrollTimer.current);
-      autoScrollTimer.current = null;
-    }
-  };
-
-  useEffect(() => {
-    if (!isDragging) {
-      Animated.timing(pan.y, { toValue: baseTop, duration: 150, useNativeDriver: false }).start();
-    }
-  }, [baseTop, isDragging]);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true, 
-      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 5,
-      
-      onPanResponderGrant: () => {
-        setIsDragging(true);
-        dragStartScrollY.current = scrollYRef.current;
-        currentDy.current = 0;
-        latestProps.current.onDragStart(); 
-        pan.setOffset({ x: 0, y: pan.y._value });
-        pan.setValue({ x: 0, y: 0 });
-
-        longPressTimer.current = setTimeout(() => {
-          setShowDelete(true);
-        }, 1000);
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (Math.abs(gestureState.dy) > 5 || Math.abs(gestureState.dx) > 5) {
-          if (longPressTimer.current) {
-            clearTimeout(longPressTimer.current);
-            longPressTimer.current = null;
-          }
-          setShowDelete(false);
-        }
-
-        currentDy.current = gestureState.dy;
-        const scrollComp = scrollYRef.current - dragStartScrollY.current;
-        pan.setValue({ x: 0, y: currentDy.current + scrollComp });
-
-        const moveY = gestureState.moveY;
-        const topBoundary = 280;
-        const bottomBoundary = height - 180;
-        const scrollSpeed = 5;
-
-        if (moveY < topBoundary) {
-          if (!autoScrollTimer.current) {
-            autoScrollTimer.current = setInterval(() => {
-              if (scrollYRef.current > 0) {
-                scrollYRef.current = Math.max(0, scrollYRef.current - scrollSpeed);
-                scrollViewRef.current?.scrollTo({ y: scrollYRef.current, animated: false });
-                const newScrollComp = scrollYRef.current - dragStartScrollY.current;
-                pan.setValue({ x: 0, y: currentDy.current + newScrollComp });
-              }
-            }, 16);
-          }
-        } else if (moveY > bottomBoundary) {
-          if (!autoScrollTimer.current) {
-            autoScrollTimer.current = setInterval(() => {
-              scrollYRef.current += scrollSpeed;
-              scrollViewRef.current?.scrollTo({ y: scrollYRef.current, animated: false });
-              const newScrollComp = scrollYRef.current - dragStartScrollY.current;
-              pan.setValue({ x: 0, y: currentDy.current + newScrollComp });
-            }, 16);
-          }
-        } else {
-          stopAutoScroll();
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => { 
-        if (longPressTimer.current) clearTimeout(longPressTimer.current);
-        stopAutoScroll(); 
-        pan.flattenOffset(); 
-        setIsDragging(false); 
-        latestProps.current.onDragEnd(latestProps.current.item, pan.y._value); 
-      },
-      onPanResponderTerminate: () => { 
-        if (longPressTimer.current) clearTimeout(longPressTimer.current);
-        stopAutoScroll(); 
-        pan.flattenOffset(); 
-        setIsDragging(false); 
-        latestProps.current.onDragEnd(latestProps.current.item, pan.y._value); 
-      }
-    })
-  ).current;
-
-  const bgColor = '#e0f2f1';
-  const borderColor = '#b2dfdb';
-  const lineColor = '#00695c';
-  const textColor = '#00695c';
-
-  const isTooShort = baseHeight < 45;
-
-  return (
-    <Animated.View 
-      {...panResponder.panHandlers}
-      style={{ 
-        position: 'absolute', top: 0, left: 64, right: 8, height: baseHeight - 4, 
-        backgroundColor: bgColor, borderRadius: 8, borderWidth: 1, borderColor, 
-        overflow: isTooShort ? 'visible' : 'hidden', zIndex: isDragging ? 50 : 5,
-        transform: [{ translateY: pan.y }, { scale: isDragging ? 1.02 : 1 }],
-        shadowColor: '#00695c', shadowOffset: { width: 0, height: isDragging ? 6 : 2 }, 
-        shadowOpacity: isDragging ? 0.1 : 0, shadowRadius: isDragging ? 8 : 4, elevation: isDragging ? 8 : 0 
-      }}
-    >
-      <View className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg" style={{ backgroundColor: lineColor }} />
-      <View className="flex-1 p-2 flex-row justify-between">
-        <View className="flex-1 flex-col" style={{ paddingRight: isTooShort && showDelete ? 36 : 0 }}>
-          <Text className="text-[14px] font-bold" style={{ color: textColor }} numberOfLines={1}>{item.title}</Text>
-          {!isTooShort && (
-            <View className="mt-1 flex-row items-center">
-              <MaterialIcons name="event" size={12} color={textColor} style={{ marginRight: 4 }}/>
-              <Text style={{ fontSize: 11, color: textColor, fontWeight: 'bold' }}>
-                {new Date(item.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - {new Date(item.end_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-              </Text>
-            </View>
-          )}
-        </View>
-        {!isTooShort && showDelete && (
-          <View className="justify-end pl-2">
-            <TouchableOpacity 
-              className="w-7 h-7 rounded-full items-center justify-center bg-[#ba1a1a] shadow-sm"
-              onPress={() => latestProps.current.onRemove(item)}
-            >
-              <MaterialIcons name="delete-outline" size={16} color="#ffffff" />
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-
-      {isTooShort && showDelete && (
-        <View style={{ position: 'absolute', top: 4, right: 4, zIndex: 100 }}>
-          <TouchableOpacity 
-            className="mr-1 w-5 h-5 rounded-full items-center justify-center bg-[#ba1a1a] shadow-sm"
-            onPress={() => latestProps.current.onRemove(item)}
-          >
-            <MaterialIcons name="delete-outline" size={14} color="#ffffff" />
-          </TouchableOpacity>
-        </View>
-      )}
-    </Animated.View>
-  );
-};
-
 export default function CalendarScreen({ navigation }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [scheduledItems, setScheduledItems] = useState([]);
   const [sidebarTasks, setSidebarTasks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [scrollEnabled, setScrollEnabled] = useState(true);
+  
   const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
+  const calendarHeightAnim = useRef(new Animated.Value(40)).current;
+  const arrowRotationAnim = useRef(new Animated.Value(0)).current;
+  const contentOpacityAnim = useRef(new Animated.Value(1)).current;
+
+  const [isAutoScheduleOpen, setIsAutoScheduleOpen] = useState(false);
+  const [isScheduling, setIsScheduling] = useState(false);
 
   const scrollViewRef = useRef(null);
   const scrollYRef = useRef(0);
@@ -439,23 +99,6 @@ export default function CalendarScreen({ navigation }) {
   
   const [contextMenu, setContextMenu] = useState({ visible: false, top: 0, time: null });
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskPomo, setNewTaskPomo] = useState(1);
-  const [showCustomPomo, setShowCustomPomo] = useState(false);
-  const [activeSubPopup, setActiveSubPopup] = useState(null); 
-  const [quickPriority, setQuickPriority] = useState(4); 
-  
-  const [tempDeadlineDate, setTempDeadlineDate] = useState(new Date());
-  const [tempDeadlineQuick, setTempDeadlineQuick] = useState('Hôm nay');
-  const [deadlineViewDate, setDeadlineViewDate] = useState(new Date());
-  const [finalDeadline, setFinalDeadline] = useState(null);
-
-  const [tempReminderDate, setTempReminderDate] = useState(new Date());
-  const [reminderViewDate, setReminderViewDate] = useState(new Date());
-  const [tempReminderHour, setTempReminderHour] = useState('09');
-  const [tempReminderMinute, setTempReminderMinute] = useState('00');
-  const [tempReminderQuick, setTempReminderQuick] = useState('');
-  const [finalReminder, setFinalReminder] = useState(null);
 
   const [isCreateEventOpen, setIsCreateEventOpen] = useState(false);
   const [newEventTitle, setNewEventTitle] = useState('');
@@ -464,7 +107,6 @@ export default function CalendarScreen({ navigation }) {
   const rightDrawerAnim = useRef(new Animated.Value(RIGHT_DRAWER_WIDTH)).current;
   const leftDrawerAnim = useRef(new Animated.Value(-LEFT_DRAWER_WIDTH)).current; 
   const filterMenuAnim = useRef(new Animated.Value(RIGHT_DRAWER_WIDTH)).current;
-  const createTaskAnim = useRef(new Animated.Value(height)).current;
   const createEventAnim = useRef(new Animated.Value(height)).current;
 
   const checkOverlap = (start, end, excludeId = null) => {
@@ -493,14 +135,12 @@ export default function CalendarScreen({ navigation }) {
       try {
         const calendarRes = await api.get(`/planner/calendar/daily/?date=${dateStr}`);
         events = calendarRes.data.events || [];
-      } catch (e) {
-      }
+      } catch (e) {}
 
       try {
         const tasksRes = await api.get('/planner/tasks/');
         tasksData = tasksRes.data || [];
-      } catch (e) {
-      }
+      } catch (e) {}
 
       setScheduledItems(events);
       setSidebarTasks(tasksData);
@@ -540,95 +180,22 @@ export default function CalendarScreen({ navigation }) {
     setContextMenu({ visible: true, top: locationY, time: newTime });
   };
 
-  const handleAutoSchedule = () => {
-    Alert.alert(
-      "Xếp lịch tự động",
-      "Hệ thống sẽ tự động phân bổ các công việc chưa có lịch vào các khoảng thời gian trống trong 7 ngày tới. Bạn có muốn tiếp tục?",
-      [
-        { text: "Hủy", style: "cancel" },
-        { 
-          text: "Xác nhận", 
-          onPress: async () => {
-            try {
-              setIsLoading(true);
-              await api.post('/planner/tasks/generate-schedule/');
-              fetchCalendarData(true);
-            } catch (e) {
-              Alert.alert("Lỗi", "Đã xảy ra sự cố khi xếp lịch tự động.");
-              setIsLoading(false);
-            }
-          }
-        }
-      ]
-    );
+  const confirmAutoSchedule = async (scheduleOpts) => {
+    setIsScheduling(true);
+    try {
+      await api.post('/planner/tasks/generate-schedule/', scheduleOpts);
+      setIsAutoScheduleOpen(false);
+      fetchCalendarData(true);
+    } catch (e) {
+      Alert.alert("Error", "An error occurred during automatic scheduling.");
+    } finally {
+      setIsScheduling(false);
+    }
   };
 
   const openCreateTaskPopup = () => {
     setContextMenu({ ...contextMenu, visible: false });
     setIsCreateTaskOpen(true);
-    if(contextMenu.time) {
-        setTempDeadlineDate(new Date(contextMenu.time));
-        setDeadlineViewDate(new Date(contextMenu.time));
-        setTempReminderDate(new Date(contextMenu.time));
-        setReminderViewDate(new Date(contextMenu.time));
-        setTempReminderHour(contextMenu.time.getHours().toString().padStart(2, '0'));
-        setTempReminderMinute(contextMenu.time.getMinutes().toString().padStart(2, '0'));
-    } else {
-        setTempDeadlineDate(new Date());
-        setDeadlineViewDate(new Date());
-        setTempReminderDate(new Date());
-        setReminderViewDate(new Date());
-    }
-    Animated.timing(createTaskAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start();
-  };
-
-  const closeCreateTaskPopup = () => {
-    Animated.timing(createTaskAnim, { toValue: height, duration: 300, useNativeDriver: true }).start(() => {
-      setIsCreateTaskOpen(false);
-      setNewTaskTitle('');
-      setNewTaskPomo(1);
-      setShowCustomPomo(false);
-      setActiveSubPopup(null);
-      setQuickPriority(4);
-      setFinalDeadline(null);
-      setFinalReminder(null);
-      setTempDeadlineDate(new Date());
-      setDeadlineViewDate(new Date());
-      setTempReminderDate(new Date());
-      setReminderViewDate(new Date());
-    });
-  };
-
-  const handleQuickCreateTask = async () => {
-    if (!newTaskTitle.trim()) return;
-    const startTime = contextMenu.time;
-    const durationMinutes = newTaskPomo * 30; 
-    const endTime = new Date(startTime.getTime() + durationMinutes * 60000);
-
-    if (checkOverlap(startTime, endTime)) {
-        Alert.alert("Trùng lịch", "Khoảng thời gian này đã có công việc hoặc sự kiện khác.");
-        return;
-    }
-
-    try {
-      const taskData = {
-        title: newTaskTitle, 
-        estimated_pomodoros: newTaskPomo,
-        scheduled_start_time: startTime.toISOString(), 
-        scheduled_end_time: endTime.toISOString(),
-        priority: quickPriority === 4 ? 2 : quickPriority, 
-        focus_duration: 25, 
-        short_break: 5, 
-        is_completed: false
-      };
-      if(finalDeadline) taskData.deadline = finalDeadline;
-      if(finalReminder) taskData.reminder = finalReminder;
-      
-      await api.post('/planner/tasks/', taskData);
-      closeCreateTaskPopup();
-      fetchCalendarData(false); 
-    } catch (e) {
-    }
   };
 
   const openCreateEventPopup = () => {
@@ -651,7 +218,7 @@ export default function CalendarScreen({ navigation }) {
     const endTime = new Date(startTime.getTime() + newEventDuration * 60000);
 
     if (checkOverlap(startTime, endTime)) {
-        Alert.alert("Trùng lịch", "Khoảng thời gian này đã có công việc hoặc sự kiện khác.");
+        Alert.alert("Schedule Conflict", "This time slot is already occupied by another task or event.");
         return;
     }
 
@@ -726,12 +293,12 @@ export default function CalendarScreen({ navigation }) {
 
   const handleRemoveFromCalendar = async (item) => {
     Alert.alert(
-      "Xóa khỏi lịch",
-      item.type === 'fixed_event' ? "Bạn có chắc muốn xóa sự kiện này?" : "Hủy gán lịch cho công việc này?",
+      "Remove from calendar",
+      item.type === 'fixed_event' ? "Are you sure you want to delete this event?" : "Unschedule this task?",
       [
-        { text: "Hủy", style: "cancel" },
+        { text: "Cancel", style: "cancel" },
         { 
-          text: "Xóa", 
+          text: "Remove", 
           style: "destructive",
           onPress: async () => {
             const targetId = item.task_id || item.event_id || item.id;
@@ -770,7 +337,7 @@ export default function CalendarScreen({ navigation }) {
     const targetId = task.task_id || task.id;
 
     if (checkOverlap(newStartTime, newEndTime)) {
-        Alert.alert("Trùng lịch", "Không có đủ không gian trống lúc 08:00 sáng cho công việc này.");
+        Alert.alert("Schedule Conflict", "Not enough empty space at 08:00 AM for this task.");
         return;
     }
 
@@ -790,12 +357,7 @@ export default function CalendarScreen({ navigation }) {
 
   const openLeftDrawer = () => { setIsLeftDrawerOpen(true); Animated.timing(leftDrawerAnim, { toValue: 0, duration: 250, useNativeDriver: true }).start(); };
   const closeLeftDrawer = () => { Animated.timing(leftDrawerAnim, { toValue: -LEFT_DRAWER_WIDTH, duration: 250, useNativeDriver: true }).start(() => setIsLeftDrawerOpen(false)); };
-  const navigateToTasks = () => { closeLeftDrawer(); setTimeout(() => { navigation.navigate('Tasks'); }, 250); };
-  const navigateToCalendar = () => { closeLeftDrawer(); }; 
-  const navigateToBookshelf = () => { closeLeftDrawer(); setTimeout(() => { navigation.navigate('Bookshelf'); }, 250); };
-  const navigateToHome = () => { closeLeftDrawer(); setTimeout(() => { navigation.navigate('Home'); }, 250); };
-  const handleLogout = async () => { await AsyncStorage.multiRemove(['access_token', 'refresh_token', 'current_task_id', 'timer_state', 'timer_end_time', 'timer_total_time', 'timer_time_left']); navigation.replace('Login'); };
-
+  
   const openRightDrawer = () => { setIsRightDrawerOpen(true); Animated.timing(rightDrawerAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start(); };
   const closeRightDrawer = () => { Animated.timing(rightDrawerAnim, { toValue: RIGHT_DRAWER_WIDTH, duration: 300, useNativeDriver: true }).start(() => { setIsRightDrawerOpen(false); filterMenuAnim.setValue(RIGHT_DRAWER_WIDTH); }); };
   const openFilterMenu = () => { Animated.timing(filterMenuAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start(); };
@@ -814,64 +376,67 @@ export default function CalendarScreen({ navigation }) {
     });
   };
 
-  const toggleCalendarExpansion = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setIsCalendarExpanded(!isCalendarExpanded);
+  const getMonthGridRows = useCallback(() => {
+    const year = selectedDate.getFullYear();
+    const month = selectedDate.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const adjustedFirstDay = firstDayIndex === 0 ? 6 : firstDayIndex - 1;
+    return Math.ceil((daysInMonth + adjustedFirstDay) / 7);
+  }, [selectedDate]);
+
+  useEffect(() => {
+    if (isCalendarExpanded) {
+      calendarHeightAnim.setValue(getMonthGridRows() * WEEK_ROW_HEIGHT);
+    }
+  }, [selectedDate, isCalendarExpanded, getMonthGridRows]);
+
+    const toggleCalendarExpansion = () => {
+    const expanding = !isCalendarExpanded;
+    const targetHeight = expanding ? getMonthGridRows() * WEEK_ROW_HEIGHT : 40;
+    Animated.timing(calendarHeightAnim, {
+      toValue: targetHeight,
+      duration: 320,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false, 
+    }).start();
+
+    Animated.timing(arrowRotationAnim, {
+      toValue: expanding ? 1 : 0,
+      duration: 320,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+
+   
+    Animated.timing(contentOpacityAnim, {
+      toValue: 0,
+      duration: 130,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start(() => {
+      setIsCalendarExpanded(expanding);
+      Animated.timing(contentOpacityAnim, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }).start();
+    });
   };
 
-  const handlePrevDeadlineMonth = () => setDeadlineViewDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
-  const handleNextDeadlineMonth = () => setDeadlineViewDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  const arrowRotation = arrowRotationAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '180deg']
+  });
 
-  const handlePrevReminderMonth = () => setReminderViewDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
-  const handleNextReminderMonth = () => setReminderViewDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
-
-  const handleSaveDeadline = () => {
-    let newDeadline = null;
-    if (tempDeadlineQuick !== 'Xóa hạn' && tempDeadlineDate) {
-      newDeadline = tempDeadlineDate.toISOString();
-    }
-    setFinalDeadline(newDeadline);
-    setActiveSubPopup(null);
-  };
-
-  const handleReminderQuickSelect = (type) => {
-    setTempReminderQuick(type);
-    if (finalDeadline && (type === '5 min' || type === '10 min' || type === 'At time')) {
-      const d = new Date(finalDeadline);
-      if (type === '5 min') d.setMinutes(d.getMinutes() - 5);
-      if (type === '10 min') d.setMinutes(d.getMinutes() - 10);
-      setReminderViewDate(new Date(d));
-      setTempReminderDate(new Date(d));
-      setTempReminderHour(d.getHours().toString().padStart(2, '0'));
-      setTempReminderMinute(d.getMinutes().toString().padStart(2, '0'));
-    }
-  };
-
-  const handleSaveReminder = () => {
-    if (tempReminderDate) {
-       const d = new Date(tempReminderDate);
-       d.setHours(parseInt(tempReminderHour || 0));
-       d.setMinutes(parseInt(tempReminderMinute || 0));
-       d.setSeconds(0);
-
-       const now = new Date();
-       if (d < now) {
-          Alert.alert("Lỗi", "Không thể đặt nhắc nhở cho thời gian trong quá khứ.");
-          return;
-       }
-       if (finalDeadline && d > new Date(finalDeadline)) {
-          Alert.alert("Lỗi", "Nhắc nhở không được vượt quá hạn chót.");
-          return;
-       }
-       setFinalReminder(d.toISOString());
-    } else {
-       setFinalReminder(null);
-    }
-    setActiveSubPopup(null);
+  const getPriorityStyles = (task) => {
+    if (task.is_completed) return { line: 'bg-[#e2bfb8]', opacity: 'opacity-60' };
+    return { line: 'bg-[#C27664]', opacity: 'opacity-100' };
   };
 
   const renderCalendarDays = () => {
-    const daysOfWeek = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+    const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const year = selectedDate.getFullYear();
     const month = selectedDate.getMonth();
     const currentDay = selectedDate.getDate();
@@ -892,13 +457,13 @@ export default function CalendarScreen({ navigation }) {
         return null;
     });
 
-    const monthNames = ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"];
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
     return (
       <View className="w-full relative pb-4"> 
         <View className="flex-row items-center justify-between mb-3 -ml-1 pr-1">
           <TouchableOpacity className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg">
-            <Text className="text-[16px] font-bold text-[#1b1c1c]">{monthNames[month]}, {year}</Text>
+            <Text className="text-[16px] font-bold text-[#1b1c1c]">{monthNames[month]} {year}</Text>
           </TouchableOpacity>
           <View className="flex-row items-center gap-2">
             <TouchableOpacity onPress={handlePrevMonth} className="w-8 h-8 rounded-full bg-[#efeded] items-center justify-center active:bg-[#e4e2e2]"><MaterialIcons name="chevron-left" size={22} color="#1b1c1c" /></TouchableOpacity>
@@ -912,41 +477,50 @@ export default function CalendarScreen({ navigation }) {
           ))}
         </View>
 
-        <View className="flex-row flex-wrap px-1 overflow-hidden relative" style={{ height: isCalendarExpanded ? undefined : 40 }}>
-            {isCalendarExpanded ? (
-                <>
-                    {Array(adjustedFirstDay).fill(null).map((_, i) => <View key={`b-${i}`} className="w-[14.28%] h-8 mb-1" />)}
-                    {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
+        <Animated.View style={{ height: calendarHeightAnim, overflow: 'hidden', width: '100%' }}>
+            
+            <Animated.View 
+                className="flex-row flex-wrap px-1 relative w-full" 
+                style={{ opacity: contentOpacityAnim }}
+            >
+                {isCalendarExpanded ? (
+                    <>
+                        {Array(adjustedFirstDay).fill(null).map((_, i) => <View key={`b-${i}`} className="w-[14.28%] h-8 mb-1" />)}
+                        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
+                            const isSelectedDate = d === selectedDate.getDate();
+                            const isToday = new Date().toDateString() === new Date(year, month, d).toDateString();
+                            return (
+                            <View key={d} className="w-[14.28%] items-center mb-1">
+                                <TouchableOpacity onPress={() => setSelectedDate(new Date(year, month, d))} className={`w-8 h-8 items-center justify-center rounded-full ${isSelectedDate ? 'bg-[#c89d7d] shadow-md' : 'active:bg-[#efeded]'}`}>
+                                <Text className={`text-[14px] ${isSelectedDate ? 'text-white font-bold' : isToday ? 'text-[#c89d7d] font-bold' : 'text-[#1b1c1c] font-medium'}`}>{d}</Text>
+                                </TouchableOpacity>
+                            </View>
+                            );
+                        })}
+                    </>
+                ) : (
+                    currentWeekDays.map((d, index) => {
+                        if (d === null) return <View key={`cw-b-${index}`} className="w-[14.28%] h-8 mb-1" />;
                         const isSelectedDate = d === selectedDate.getDate();
                         const isToday = new Date().toDateString() === new Date(year, month, d).toDateString();
                         return (
-                        <View key={d} className="w-[14.28%] items-center mb-1">
-                            <TouchableOpacity onPress={() => setSelectedDate(new Date(year, month, d))} className={`w-8 h-8 items-center justify-center rounded-full ${isSelectedDate ? 'bg-[#c89d7d] shadow-md' : 'active:bg-[#efeded]'}`}>
-                            <Text className={`text-[14px] ${isSelectedDate ? 'text-white font-bold' : isToday ? 'text-[#c89d7d] font-bold' : 'text-[#1b1c1c] font-medium'}`}>{d}</Text>
-                            </TouchableOpacity>
-                        </View>
-                        );
-                    })}
-                </>
-            ) : (
-                currentWeekDays.map((d, index) => {
-                    if (d === null) return <View key={`cw-b-${index}`} className="w-[14.28%] h-8 mb-1" />;
-                    const isSelectedDate = d === selectedDate.getDate();
-                    const isToday = new Date().toDateString() === new Date(year, month, d).toDateString();
-                    return (
-                         <View key={`cw-${d}`} className="w-[14.28%] items-center mb-1">
-                            <TouchableOpacity onPress={() => setSelectedDate(new Date(year, month, d))} className={`w-8 h-8 items-center justify-center rounded-full ${isSelectedDate ? 'bg-[#c89d7d] shadow-md' : 'active:bg-[#efeded]'}`}>
-                                <Text className={`text-[14px] ${isSelectedDate ? 'text-white font-bold' : isToday ? 'text-[#c89d7d] font-bold' : 'text-[#1b1c1c] font-medium'}`}>{d}</Text>
-                            </TouchableOpacity>
-                        </View>
-                    )
-                })
-            )}
-        </View>
+                             <View key={`cw-${d}`} className="w-[14.28%] items-center mb-1">
+                                <TouchableOpacity onPress={() => setSelectedDate(new Date(year, month, d))} className={`w-8 h-8 items-center justify-center rounded-full ${isSelectedDate ? 'bg-[#c89d7d] shadow-md' : 'active:bg-[#efeded]'}`}>
+                                    <Text className={`text-[14px] ${isSelectedDate ? 'text-white font-bold' : isToday ? 'text-[#c89d7d] font-bold' : 'text-[#1b1c1c] font-medium'}`}>{d}</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )
+                    })
+                )}
+            </Animated.View>
+            
+        </Animated.View>
         
         <View className="absolute bottom-[-5px] left-0 right-0 items-center justify-center pointer-events-box-none">
             <TouchableOpacity onPress={toggleCalendarExpansion} className="py-1 px-4">
-                <MaterialIcons name={isCalendarExpanded ? "keyboard-arrow-up" : "keyboard-arrow-down"} size={28} color="#8e706b" />
+                <Animated.View style={{ transform: [{ rotate: arrowRotation }] }}>
+                  <MaterialIcons name="keyboard-arrow-down" size={28} color="#ce896b" />
+                </Animated.View>
             </TouchableOpacity>
         </View>
       </View>
@@ -979,8 +553,8 @@ export default function CalendarScreen({ navigation }) {
                   <>
                     <TouchableOpacity activeOpacity={1} onPress={() => setContextMenu({ ...contextMenu, visible: false })} style={[StyleSheet.absoluteFill, { zIndex: 99 }]}><View /></TouchableOpacity>
                     <View style={{ position: 'absolute', top: contextMenu.top, left: 70, backgroundColor: '#fff', borderRadius: 12, padding: 4, elevation: 5, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, zIndex: 100, width: 170 }}>
-                      <TouchableOpacity className="flex-row items-center gap-2 px-3 py-3 border-b border-[#f5f3f3] active:bg-[#f5f3f3] rounded-t-lg" onPress={openCreateTaskPopup}><MaterialIcons name="check-circle-outline" size={18} color="#c89d7d" /><Text className="text-[14px] font-medium text-[#1b1c1c]">Tạo Task mới</Text></TouchableOpacity>
-                      <TouchableOpacity className="flex-row items-center gap-2 px-3 py-3 active:bg-[#f5f3f3] rounded-b-lg" onPress={openCreateEventPopup}><MaterialIcons name="event" size={18} color="#ba1a1a" /><Text className="text-[14px] font-medium text-[#1b1c1c]">Tạo Sự kiện</Text></TouchableOpacity>
+                      <TouchableOpacity className="flex-row items-center gap-2 px-3 py-3 border-b border-[#f5f3f3] active:bg-[#f5f3f3] rounded-t-lg" onPress={openCreateTaskPopup}><MaterialIcons name="check-circle-outline" size={18} color="#c89d7d" /><Text className="text-[14px] font-medium text-[#1b1c1c]">New Task</Text></TouchableOpacity>
+                      <TouchableOpacity className="flex-row items-center gap-2 px-3 py-3 active:bg-[#f5f3f3] rounded-b-lg" onPress={openCreateEventPopup}><MaterialIcons name="event" size={18} color="#6bbda7" /><Text className="text-[14px] font-medium text-[#1b1c1c]">New Event</Text></TouchableOpacity>
                     </View>
                   </>
                 )}
@@ -1022,34 +596,22 @@ export default function CalendarScreen({ navigation }) {
     );
   };
 
-  const dYear = deadlineViewDate.getFullYear();
-  const dMonth = deadlineViewDate.getMonth();
-  const dDaysInMonth = new Date(dYear, dMonth + 1, 0).getDate();
-  const dFirstDayIndex = new Date(dYear, dMonth, 1).getDay();
-  const dAdjustedFirstDay = dFirstDayIndex === 0 ? 6 : dFirstDayIndex - 1;
-
-  const rYear = reminderViewDate.getFullYear();
-  const rMonth = reminderViewDate.getMonth();
-  const rDaysInMonth = new Date(rYear, rMonth + 1, 0).getDate();
-  const rFirstDayIndex = new Date(rYear, rMonth, 1).getDay();
-  const rAdjustedFirstDay = rFirstDayIndex === 0 ? 6 : rFirstDayIndex - 1;
-
   return (
     <View style={{ flex: 1, backgroundColor: '#fbf9f8' }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <SafeAreaView style={{ flex: 1 }}>
           <View className="flex-row items-center justify-between px-5 py-12 bg-[#fbf9f8] z-20 sticky top-0">
-            <TouchableOpacity onPress={openLeftDrawer}><MaterialIcons name="menu" size={26} color="#1b1c1c" /></TouchableOpacity>
+            <TouchableOpacity onPress={openLeftDrawer}><MaterialIcons name="menu" size={26} color="#c89d7d" /></TouchableOpacity>
             
             <TouchableOpacity 
-              onPress={handleAutoSchedule} 
-              className="flex-row items-center justify-center bg-[#c89d7d] px-8 py-1 rounded-full border border-[#c89d7d]/20"
-              activeOpacity={0.7}
+              onPress={() => setIsAutoScheduleOpen(true)} 
+              className="flex-row items-center justify-center bg-[#c89d7d] px-5 py-1 mt-2 rounded-full border border-[#c89d7d]/20 shadow-sm"
+              activeOpacity={0.8}
             >
-              <Text className="text-[14px] font-bold text-[#ffffff] ml-1">Xếp lịch</Text>
+              <Text className="text-[14px] font-bold text-[#ffffff] tracking-wide">Auto-Schedule</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={openRightDrawer}><MaterialIcons name="add" size={26} color="#1b1c1c" /></TouchableOpacity>
+            <TouchableOpacity onPress={openRightDrawer}><MaterialIcons name="add" size={26} color="#c89d7d" /></TouchableOpacity>
           </View>
 
           <View className="px-5 mt-2 z-10 bg-[#fbf9f8] pb-1">{renderCalendarDays()}</View>
@@ -1082,7 +644,7 @@ export default function CalendarScreen({ navigation }) {
           <SafeAreaView style={{ flex: 1 }}>
             <TouchableOpacity className="px-4 py-3 mt-6 border-b border-[#e4e2e2]/50" onPress={openFilterMenu}><Text className="text-[20px] font-bold text-[#c89d7d]">{selectedFilter}</Text></TouchableOpacity>
             <ScrollView className="flex-1 px-4 pt-2">
-              <Text className="text-[12px] font-bold text-[#5a413c] mb-3 opacity-70">CHẠM ĐỂ THÊM VÀO LỊCH</Text>
+              <Text className="text-[12px] font-bold text-[#5a413c] mb-3 opacity-70">TAP TO ADD TO CALENDAR</Text>
               {getFilteredSidebarTasks().length > 0 ? (
                 getFilteredSidebarTasks().map(task => (
                   <TouchableOpacity key={task.id} onPress={() => handleAddTaskToCalendar(task)} className="bg-[#ffffff] rounded-xl p-3 border border-[#e4e2e2] shadow-sm mb-3">
@@ -1094,7 +656,7 @@ export default function CalendarScreen({ navigation }) {
                   </TouchableOpacity>
                 ))
               ) : (
-                <Text className="text-[14px] text-center text-[#8e706b] mt-10">Không có công việc nào chờ xếp lịch</Text>
+                <Text className="text-[14px] text-center text-[#8e706b] mt-10">No pending tasks to schedule</Text>
               )}
             </ScrollView>
           </SafeAreaView>
@@ -1103,7 +665,7 @@ export default function CalendarScreen({ navigation }) {
             <SafeAreaView style={{ flex: 1 }}>
               <View className="flex-row items-center px-2 py-2 mt-6 border-b border-[#e4e2e2]/50 mb-4">
                 <TouchableOpacity onPress={closeFilterMenu} className="w-10 h-10 items-center justify-center rounded-full"><MaterialIcons name="arrow-back" size={24} color="#5a413c" /></TouchableOpacity>
-                <Text className="text-[18px] font-bold text-[#1b1c1c] ml-1">Bộ lọc</Text>
+                <Text className="text-[18px] font-bold text-[#1b1c1c] ml-1">Filter</Text>
               </View>
               <ScrollView className="px-4 flex-col">
                 {filterOptions.map(option => {
@@ -1123,230 +685,6 @@ export default function CalendarScreen({ navigation }) {
           </Animated.View>
         </Animated.View>
 
-        {isCreateTaskOpen && (
-          <TouchableOpacity activeOpacity={1} onPress={closeCreateTaskPopup} style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 90 }]}>
-             <View />
-          </TouchableOpacity>
-        )}
-        <Animated.View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#ffffff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: Platform.OS === 'ios' ? 34 : 20, minHeight: 220, zIndex: 101, transform: [{ translateY: createTaskAnim }], shadowColor: '#000', shadowOffset: { width: 0, height: -8 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 15 }}>
-          <View className="w-full items-center pt-3 pb-2"><View className="w-12 h-1.5 bg-[#e4e2e2] rounded-full" /></View>
-          
-          <View className="px-5 pt-3 pb-5 flex-col">
-            {activeSubPopup === null ? (
-              <>
-                <TextInput 
-                  className="w-full text-[18px] text-[#1b1c1c] font-medium mb-3" 
-                  placeholder="Bạn định làm gì?" 
-                  placeholderTextColor="#e2bfb8" 
-                  value={newTaskTitle} 
-                  onChangeText={setNewTaskTitle} 
-                />
-
-                <View className="flex-row items-center border-t border-b border-[#f5f3f3] py-3">
-                  {!showCustomPomo ? (
-                    <View className="flex-row items-center gap-2 flex-1">
-                      {[1, 2, 3, 4, 5].map(num => (
-                        <TouchableOpacity key={num} onPress={() => setNewTaskPomo(num)} className="px-1 py-1">
-                          <MaterialIcons name="timer" size={28} color={newTaskPomo >= num ? "#c89d7d" : "#e4e2e2"} />
-                        </TouchableOpacity>
-                      ))}
-                      <View className="flex-1 items-end">
-                         <TouchableOpacity onPress={() => setShowCustomPomo(true)} className="bg-[#f5f3f3] rounded-full p-1"><MaterialIcons name="arrow-forward" size={24} color="#5a413c" /></TouchableOpacity>
-                      </View>
-                    </View>
-                  ) : (
-                    <View className="flex-row items-center flex-1">
-                      <TouchableOpacity onPress={() => setShowCustomPomo(false)} className="bg-[#f5f3f3] rounded-full p-1 mr-2"><MaterialIcons name="arrow-back" size={24} color="#5a413c" /></TouchableOpacity>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-1 flex-row">
-                        {[...Array(20)].map((_, i) => (
-                          <TouchableOpacity 
-                            key={i} onPress={() => setNewTaskPomo(i + 1)} 
-                            className={`w-10 h-10 items-center justify-center rounded-full mx-1 ${newTaskPomo === i + 1 ? 'bg-[#c89d7d]' : 'bg-[#f5f3f3]'}`}
-                          >
-                            <Text className={`text-[16px] font-bold ${newTaskPomo === i + 1 ? 'text-white' : 'text-[#1b1c1c]'}`}>{i + 1}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  )}
-                </View>
-
-                <View className="flex-row items-center justify-between mt-4">
-                  <View className="flex-row gap-4">
-                    <TouchableOpacity onPress={() => setActiveSubPopup('calendar')} className="p-2.5 bg-[#f5f3f3] rounded-full">
-                       <MaterialIcons name="event" size={22} color={finalDeadline ? '#c89d7d' : '#5a413c'} />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setActiveSubPopup('priority')} className="p-2.5 bg-[#f5f3f3] rounded-full">
-                       <MaterialIcons name="flag" size={22} color={quickPriority === 1 ? '#ba1a1a' : quickPriority === 2 ? '#ff8c00' : quickPriority === 3 ? '#c89d7d' : '#5a413c'} />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setActiveSubPopup('reminder')} className="p-2.5 bg-[#f5f3f3] rounded-full">
-                       <MaterialIcons name="notifications-none" size={22} color={finalReminder ? '#c89d7d' : '#5a413c'} />
-                    </TouchableOpacity>
-                  </View>
-                  <TouchableOpacity 
-                    className={`w-12 h-12 rounded-full items-center justify-center ${newTaskTitle.trim() ? 'bg-[#c89d7d]' : 'bg-[#e4e2e2]'}`} 
-                    onPress={handleQuickCreateTask} disabled={!newTaskTitle.trim()}
-                  >
-                     <MaterialIcons name="arrow-upward" size={26} color={newTaskTitle.trim() ? '#ffffff' : '#8e706b'} />
-                  </TouchableOpacity>
-                </View>
-              </>
-            ) : (
-              <View className="flex-col pb-2">
-                
-                {activeSubPopup === 'calendar' && (
-                  <View className="flex-col">
-                    <Text className="text-[18px] font-bold text-[#1b1c1c] mb-4">Hạn Chót</Text>
-                    
-                    <View className="flex-row flex-wrap justify-between gap-y-2 mb-4">
-                      <TouchableOpacity className={`flex-row items-center gap-2 px-3 py-2 rounded-xl w-[48%] ${tempDeadlineQuick === 'Hôm nay' ? 'bg-[#c89d7d] shadow-sm' : 'bg-[#f5f3f3] border border-[#e2bfb8]/30 active:bg-[#eae8e7]'}`} onPress={() => { setTempDeadlineQuick('Hôm nay'); setTempDeadlineDate(new Date()); setDeadlineViewDate(new Date()); }}>
-                        <MaterialIcons name="today" size={20} color={tempDeadlineQuick === 'Hôm nay' ? '#ffffff' : '#c89d7d'} /><Text className={`text-[14px] font-bold ${tempDeadlineQuick === 'Hôm nay' ? 'text-[#ffffff]' : 'text-[#1b1c1c]'}`}>Hôm nay</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity className={`flex-row items-center gap-2 px-3 py-2 rounded-xl w-[48%] ${tempDeadlineQuick === 'Ngày mai' ? 'bg-[#c89d7d] shadow-sm' : 'bg-[#f5f3f3] border border-[#e2bfb8]/30 active:bg-[#eae8e7]'}`} onPress={() => { setTempDeadlineQuick('Ngày mai'); const t = new Date(); t.setDate(t.getDate() + 1); setTempDeadlineDate(t); setDeadlineViewDate(t); }}>
-                        <MaterialIcons name="event" size={20} color={tempDeadlineQuick === 'Ngày mai' ? '#ffffff' : '#c89d7d'} /><Text className={`text-[14px] font-bold ${tempDeadlineQuick === 'Ngày mai' ? 'text-[#ffffff]' : 'text-[#1b1c1c]'}`}>Ngày mai</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity className={`flex-row items-center gap-2 px-3 py-2 rounded-xl w-[48%] ${tempDeadlineQuick === 'Trong 7 ngày' ? 'bg-[#c89d7d] shadow-sm' : 'bg-[#f5f3f3] border border-[#e2bfb8]/30 active:bg-[#eae8e7]'}`} onPress={() => { setTempDeadlineQuick('Trong 7 ngày'); const t = new Date(); t.setDate(t.getDate() + 7); setTempDeadlineDate(t); setDeadlineViewDate(t); }}>
-                        <MaterialIcons name="date-range" size={20} color={tempDeadlineQuick === 'Trong 7 ngày' ? '#ffffff' : '#c89d7d'} /><Text className={`text-[14px] font-bold ${tempDeadlineQuick === 'Trong 7 ngày' ? 'text-[#ffffff]' : 'text-[#1b1c1c]'}`}>Trong 7 ngày</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity className={`flex-row items-center gap-2 px-3 py-2 rounded-xl w-[48%] ${tempDeadlineQuick === 'Xóa hạn' ? 'bg-[#c89d7d] shadow-sm' : 'bg-[#f5f3f3] border border-[#e2bfb8]/30 active:bg-[#eae8e7]'}`} onPress={() => { setTempDeadlineQuick('Xóa hạn'); setTempDeadlineDate(null); setFinalDeadline(null); }}>
-                        <MaterialIcons name="calendar-today" size={20} color={tempDeadlineQuick === 'Xóa hạn' ? '#ffffff' : '#c89d7d'} /><Text className={`text-[14px] font-bold ${tempDeadlineQuick === 'Xóa hạn' ? 'text-[#ffffff]' : 'text-[#1b1c1c]'}`}>Xóa hạn</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    <View className="flex-col gap-2 mb-6">
-                      <View className="flex-row items-center justify-between">
-                        <Text className="text-[14px] font-bold text-[#c89d7d] uppercase tracking-wider">Tháng {dMonth + 1}, {dYear}</Text>
-                        <View className="flex-row gap-2">
-                          <TouchableOpacity onPress={handlePrevDeadlineMonth} className="w-8 h-8 rounded-full border border-[#e2bfb8] items-center justify-center active:bg-[#f5f3f3]"><MaterialIcons name="chevron-left" size={20} color="#c89d7d" /></TouchableOpacity>
-                          <TouchableOpacity onPress={handleNextDeadlineMonth} className="w-8 h-8 rounded-full border border-[#e2bfb8] items-center justify-center active:bg-[#f5f3f3]"><MaterialIcons name="chevron-right" size={20} color="#c89d7d" /></TouchableOpacity>
-                        </View>
-                      </View>
-                      <View className="flex-row flex-wrap px-1">
-                        {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((day, i) => (<View key={i} className="w-[14.28%] items-center mb-2"><Text className="text-[12px] font-bold text-[#5a413c]/70">{day}</Text></View>))}
-                        {Array(dAdjustedFirstDay).fill(null).map((_, i) => <View key={`de-${i}`} className="w-[14.28%] h-10 mb-2" />)}
-                        {Array.from({ length: dDaysInMonth }, (_, i) => i + 1).map(day => {
-                          const isSelected = tempDeadlineDate && tempDeadlineDate.getDate() === day && tempDeadlineDate.getMonth() === dMonth && tempDeadlineDate.getFullYear() === dYear;
-                          return (
-                            <View key={day} className="w-[14.28%] items-center mb-2">
-                              <TouchableOpacity className={`w-9 h-9 items-center justify-center rounded-full ${isSelected ? 'bg-[#c89d7d] shadow-md' : 'active:bg-[#eae8e7]'}`} onPress={() => { setTempDeadlineDate(new Date(dYear, dMonth, day)); setTempDeadlineQuick(''); }}>
-                                <Text className={`text-[16px] ${isSelected ? 'text-[#ffffff] font-bold' : 'text-[#1b1c1c] font-medium'}`}>{day}</Text>
-                              </TouchableOpacity>
-                            </View>
-                          );
-                        })}
-                      </View>
-                    </View>
-
-                    <View className="flex-row gap-3">
-                      <TouchableOpacity onPress={() => setActiveSubPopup(null)} className="flex-1 border border-[#e2bfb8] py-3.5 rounded-xl items-center"><Text className="text-[#1b1c1c] font-bold text-[16px]">Quay lại</Text></TouchableOpacity>
-                      <TouchableOpacity onPress={handleSaveDeadline} className="flex-1 bg-[#c89d7d] py-3.5 rounded-xl items-center shadow-sm"><Text className="text-white font-bold text-[16px]">Xong</Text></TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-
-                {activeSubPopup === 'priority' && (
-                  <>
-                    <Text className="text-[18px] font-bold text-[#1b1c1c] mb-6">Mức độ ưu tiên</Text>
-                    <View className="flex-row justify-between mb-8">
-                      {[
-                        { val: 1, label: 'Cao', color: '#ba1a1a' },
-                        { val: 2, label: 'Vừa', color: '#ff8c00' },
-                        { val: 3, label: 'Thấp', color: '#c89d7d' },
-                        { val: 4, label: 'Không', color: '#5a413c' }
-                      ].map(p => (
-                        <TouchableOpacity 
-                          key={p.val} onPress={() => setQuickPriority(p.val)} 
-                          className={`w-[23%] aspect-square items-center justify-center rounded-2xl border ${quickPriority === p.val ? 'border-[#c89d7d] bg-[#c89d7d]/10' : 'border-[#e4e2e2] bg-[#ffffff]'}`}
-                        >
-                          <MaterialIcons name="flag" size={32} color={p.color} />
-                          <Text className="text-[12px] font-bold mt-1" style={{ color: p.color }}>{p.label}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                    <View className="flex-row gap-3">
-                      <TouchableOpacity onPress={() => setActiveSubPopup(null)} className="flex-1 border border-[#e2bfb8] py-3.5 rounded-xl items-center"><Text className="text-[#1b1c1c] font-bold text-[16px]">Quay lại</Text></TouchableOpacity>
-                      <TouchableOpacity onPress={() => setActiveSubPopup(null)} className="flex-1 bg-[#c89d7d] py-3.5 rounded-xl items-center shadow-sm"><Text className="text-white font-bold text-[16px]">Xong</Text></TouchableOpacity>
-                    </View>
-                  </>
-                )}
-
-                {activeSubPopup === 'reminder' && (
-                  <View className="flex-col">
-                    <Text className="text-[18px] font-bold text-[#1b1c1c] mb-4">Cài đặt nhắc nhở</Text>
-                    
-                    <View className="flex-row flex-wrap justify-between gap-y-2 mb-4">
-                        <TouchableOpacity className={`flex-row items-center justify-center gap-2 px-3 py-2 rounded-xl w-[31%] ${tempReminderQuick === 'At time' ? 'bg-[#c89d7d] shadow-sm' : 'bg-[#f5f3f3] border border-[#e2bfb8]/30 active:bg-[#eae8e7]'}`} onPress={() => handleReminderQuickSelect('At time')}>
-                        <Text className={`text-[12px] font-bold text-center ${tempReminderQuick === 'At time' ? 'text-[#ffffff]' : 'text-[#1b1c1c]'}`}>Đúng giờ</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity className={`flex-row items-center justify-center gap-2 px-3 py-2 rounded-xl w-[31%] ${tempReminderQuick === '5 min' ? 'bg-[#c89d7d] shadow-sm' : 'bg-[#f5f3f3] border border-[#e2bfb8]/30 active:bg-[#eae8e7]'}`} onPress={() => handleReminderQuickSelect('5 min')}>
-                        <Text className={`text-[12px] font-bold text-center ${tempReminderQuick === '5 min' ? 'text-[#ffffff]' : 'text-[#1b1c1c]'}`}>Trước 5p</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity className={`flex-row items-center justify-center gap-2 px-3 py-2 rounded-xl w-[31%] ${tempReminderQuick === '10 min' ? 'bg-[#c89d7d] shadow-sm' : 'bg-[#f5f3f3] border border-[#e2bfb8]/30 active:bg-[#eae8e7]'}`} onPress={() => handleReminderQuickSelect('10 min')}>
-                        <Text className={`text-[12px] font-bold text-center ${tempReminderQuick === '10 min' ? 'text-[#ffffff]' : 'text-[#1b1c1c]'}`}>Trước 10p</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    <View className="flex-row items-center justify-between mb-4">
-                        <Text className="text-[14px] font-bold text-[#c89d7d] uppercase tracking-wider">Giờ Nhắc Nhở</Text>
-                        <View className="flex-row items-center gap-1">
-                        <WheelPicker items={HOURS} selectedValue={tempReminderHour} onValueChange={setTempReminderHour} />
-                        <Text className="text-[20px] font-bold text-[#1b1c1c] pb-1">:</Text>
-                        <WheelPicker items={MINUTES} selectedValue={tempReminderMinute} onValueChange={setTempReminderMinute} />
-                        </View>
-                    </View>
-
-                    <View className="flex-col gap-2 mb-6">
-                        <View className="flex-row items-center justify-between">
-                          <Text className="text-[14px] font-bold text-[#c89d7d] uppercase tracking-wider">Tháng {rMonth + 1}, {rYear}</Text>
-                          <View className="flex-row gap-2">
-                            <TouchableOpacity onPress={handlePrevReminderMonth} className="w-8 h-8 rounded-full border border-[#e2bfb8] items-center justify-center active:bg-[#f5f3f3]"><MaterialIcons name="chevron-left" size={20} color="#c89d7d" /></TouchableOpacity>
-                            <TouchableOpacity onPress={handleNextReminderMonth} className="w-8 h-8 rounded-full border border-[#e2bfb8] items-center justify-center active:bg-[#f5f3f3]"><MaterialIcons name="chevron-right" size={20} color="#c89d7d" /></TouchableOpacity>
-                          </View>
-                        </View>
-                        <View className="flex-row flex-wrap px-1">
-                        {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((day, i) => (<View key={i} className="w-[14.28%] items-center mb-2"><Text className="text-[12px] font-bold text-[#5a413c]/70">{day}</Text></View>))}
-                        {Array(rAdjustedFirstDay).fill(null).map((_, i) => <View key={`re-${i}`} className="w-[14.28%] h-10 mb-2" />)}
-                        {Array.from({ length: rDaysInMonth }, (_, i) => i + 1).map(day => {
-                            const cellDate = new Date(rYear, rMonth, day);
-                            const isSelected = tempReminderDate && tempReminderDate.getDate() === day && tempReminderDate.getMonth() === rMonth && tempReminderDate.getFullYear() === rYear;
-                            
-                            const now = new Date();
-                            now.setHours(0,0,0,0);
-                            const isPast = cellDate < now;
-                            let isAfterDeadline = false;
-                            if (finalDeadline) {
-                               const fd = new Date(finalDeadline);
-                               fd.setHours(0,0,0,0);
-                               isAfterDeadline = cellDate > fd;
-                            }
-                            const isDisabled = isPast || isAfterDeadline;
-
-                            return (
-                            <View key={day} className="w-[14.28%] items-center mb-2">
-                                <TouchableOpacity 
-                                  disabled={isDisabled}
-                                  className={`w-9 h-9 items-center justify-center rounded-full ${isSelected ? 'bg-[#c89d7d] shadow-md' : isDisabled ? 'opacity-30' : 'active:bg-[#eae8e7]'}`} 
-                                  onPress={() => { setTempReminderDate(new Date(rYear, rMonth, day)); setTempReminderQuick(''); }}
-                                >
-                                <Text className={`text-[16px] ${isSelected ? 'text-[#ffffff] font-bold' : 'text-[#1b1c1c] font-medium'}`}>{day}</Text>
-                                </TouchableOpacity>
-                            </View>
-                            );
-                        })}
-                        </View>
-                    </View>
-
-                    <View className="flex-row gap-3">
-                         <TouchableOpacity onPress={() => { setTempReminderDate(new Date()); setFinalReminder(null); setActiveSubPopup(null); }} className="flex-1 border border-[#e2bfb8] py-3.5 rounded-xl items-center"><Text className="text-[#1b1c1c] font-bold text-[16px]">Quay lại / Xóa</Text></TouchableOpacity>
-                         <TouchableOpacity onPress={handleSaveReminder} className="flex-1 bg-[#c89d7d] py-3.5 rounded-xl items-center shadow-sm"><Text className="text-white font-bold text-[16px]">Lưu</Text></TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-              </View>
-            )}
-          </View>
-        </Animated.View>
-
         {isCreateEventOpen && (
           <TouchableOpacity activeOpacity={1} onPress={closeCreateEventPopup} style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 90 }]}>
              <View />
@@ -1357,19 +695,19 @@ export default function CalendarScreen({ navigation }) {
           
           <View className="px-5 pt-3 pb-5 flex-col">
             <View className="flex-row items-center justify-between border-b border-[#f5f3f3] pb-3 mb-4">
-              <Text className="text-[20px] font-bold text-[#1b1c1c]">Tạo Sự kiện</Text>
-              <View className="bg-[#ba1a1a]/10 px-3 py-1 rounded-full">
-                <Text className="text-[12px] font-bold text-[#ba1a1a]">
+              <Text className="text-[20px] font-bold text-[#1b1c1c]">New Event</Text>
+              <View className="bg-[#6da7e2]/10 px-3 py-1 rounded-full">
+                <Text className="text-[12px] font-bold text-[#6da7e2]">
                   {contextMenu.time ? `${String(contextMenu.time.getHours()).padStart(2,'0')}:${String(contextMenu.time.getMinutes()).padStart(2,'0')} - ${String(new Date(contextMenu.time.getTime() + newEventDuration * 60000).getHours()).padStart(2,'0')}:${String(new Date(contextMenu.time.getTime() + newEventDuration * 60000).getMinutes()).padStart(2,'0')}` : ''}
                 </Text>
               </View>
             </View>
 
             <View>
-              <Text className="text-[12px] font-bold text-[#5a413c] mb-2 uppercase tracking-wider">Tên Sự kiện</Text>
+              <Text className="text-[12px] font-bold text-[#5a413c] mb-2 uppercase tracking-wider">Event Name</Text>
               <TextInput 
                 className="w-full bg-[#f5f3f3] rounded-xl px-4 py-3 text-[16px] text-[#1b1c1c]" 
-                placeholder="Sự kiện gì sắp diễn ra?" 
+                placeholder="What's happening?" 
                 placeholderTextColor="#e2bfb8" 
                 value={newEventTitle} 
                 onChangeText={setNewEventTitle} 
@@ -1377,23 +715,38 @@ export default function CalendarScreen({ navigation }) {
             </View>
 
             <View className="flex-row items-center justify-between bg-[#fbf9f8] p-3 rounded-xl border border-[#e4e2e2] mt-4">
-              <Text className="text-[14px] font-medium text-[#5a413c]">Thời lượng (phút)</Text>
+              <Text className="text-[14px] font-medium text-[#5a413c]">Duration (minutes)</Text>
               <View className="flex-row items-center bg-[#ffffff] rounded-full p-1 border border-[#e4e2e2]">
                 <TouchableOpacity className="w-8 h-8 rounded-full bg-[#f5f3f3] items-center justify-center active:bg-[#e4e2e2]" onPress={() => setNewEventDuration(p => Math.max(15, p - 15))}><MaterialIcons name="remove" size={16} color="#1b1c1c" /></TouchableOpacity>
-                <Text className="w-12 text-center text-[16px] font-bold text-[#ba1a1a]">{newEventDuration}</Text>
-                <TouchableOpacity className="w-8 h-8 rounded-full bg-[#ba1a1a] items-center justify-center active:bg-[#a01616]" onPress={() => setNewEventDuration(p => Math.min(240, p + 15))}><MaterialIcons name="add" size={16} color="#ffffff" /></TouchableOpacity>
+                <Text className="w-12 text-center text-[16px] font-bold text-[#6da7e2]">{newEventDuration}</Text>
+                <TouchableOpacity className="w-8 h-8 rounded-full bg-[#6da7e2] items-center justify-center active:bg-[#6da7e2]" onPress={() => setNewEventDuration(p => Math.min(240, p + 15))}><MaterialIcons name="add" size={16} color="#ffffff" /></TouchableOpacity>
               </View>
             </View>
 
             <TouchableOpacity 
-              className={`w-full rounded-xl py-3.5 flex-row justify-center items-center mt-6 ${newEventTitle.trim() ? 'bg-[#ba1a1a]' : 'bg-[#e4e2e2]'}`} 
+              className={`w-full rounded-3xl py-1.5 flex-row justify-center items-center mt-6 ${newEventTitle.trim() ? 'bg-[#6da7e2]' : 'bg-[#e4e2e2]'}`} 
               onPress={handleQuickCreateEvent} 
               disabled={!newEventTitle.trim()}
             >
-              <Text className={`text-[16px] font-bold ${newEventTitle.trim() ? 'text-white' : 'text-[#8e706b]'}`}>Lưu Sự Kiện</Text>
+              <Text className={`text-[16px] font-bold ${newEventTitle.trim() ? 'text-white' : 'text-[#8e706b]'}`}>Save Event</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
+
+        <QuickCreateTaskPopup 
+          visible={isCreateTaskOpen}
+          onClose={() => setIsCreateTaskOpen(false)}
+          onTaskCreated={() => fetchCalendarData(false)}
+          initialStartTime={contextMenu.time}
+        />
+
+        <AutoSchedulePopup 
+          visible={isAutoScheduleOpen}
+          onClose={() => !isScheduling && setIsAutoScheduleOpen(false)}
+          onConfirm={confirmAutoSchedule}
+          isScheduling={isScheduling}
+        />
+
       </KeyboardAvoidingView>
     </View>
   );

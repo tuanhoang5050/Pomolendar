@@ -43,6 +43,7 @@ urlpatterns = [
     path('api/accounts/', include('accounts.urls')),
     path('api/planner/', include('planner.urls')),
     path('api/gamification/', include('gamification.urls')),
+    path('api/teams/', include('teams.urls')),
     re_path(r'^swagger(?P<format>\.json|\.yaml)$',
             schema_view.without_ui(cache_timeout=0),
             name='schema-json'),

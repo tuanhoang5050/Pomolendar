@@ -1,5 +1,3 @@
-# planner/models.py
-
 from django.db import models
 from django.conf import settings
 
@@ -24,6 +22,18 @@ class FixedEvent(BaseModel):
         return f"{self.title} ({self.user.email})"
 
 
+class Tag(BaseModel):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='tags')
+    name = models.CharField(max_length=50)
+    color = models.CharField(max_length=7, default='#808080')
+
+    class Meta:
+        unique_together = ('user', 'name')
+
+    def __str__(self):
+        return f"{self.name} ({self.user.email})"
+
+
 class Task(BaseModel):
     PRIORITY_CHOICES = (
         (1, 'Low'),
@@ -42,6 +52,7 @@ class Task(BaseModel):
     estimated_pomodoros = models.PositiveIntegerField(default=1)
     focus_duration = models.IntegerField(default=25)
     short_break = models.IntegerField(default=5)
+    tags = models.ManyToManyField(Tag, related_name='tasks', blank=True)
 
     scheduled_start_time = models.DateTimeField(null=True, blank=True)
     scheduled_end_time = models.DateTimeField(null=True, blank=True)
