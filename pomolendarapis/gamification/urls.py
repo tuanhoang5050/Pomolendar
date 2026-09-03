@@ -3,7 +3,7 @@ from .views import (
     UserProfileAPIView,
     ActivityLogListView,
     StoreAPIView,
-    EquipItemAPIView
+    EquipItemAPIView, GlobalLeaderboardAPIView
 )
 
 urlpatterns = [
@@ -11,4 +11,6 @@ urlpatterns = [
     path('activities/', ActivityLogListView.as_view(), name='activity-log'),
     path('store/', StoreAPIView.as_view(), name='store'),
     path('store/equip/', EquipItemAPIView.as_view(), name='equip-item'),
+    path('leaderboard/', GlobalLeaderboardAPIView.as_view(), name='global-leaderboard'),
+
 ]

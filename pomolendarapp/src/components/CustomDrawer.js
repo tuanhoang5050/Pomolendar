@@ -100,7 +100,7 @@ export default function CustomDrawer({ isOpen, onClose, navigation, currentScree
       <Animated.View
         onStartShouldSetResponder={() => true}
         style={{
-          position: 'absolute', top: 0, bottom: 0, left: 0, width: '36%',
+          position: 'absolute', top: 0, bottom: 0, left: 0, width: '38%',
           backgroundColor: '#ffffff', zIndex: 101, transform: [{ translateX: drawerAnim }],
           paddingTop: 60, paddingHorizontal: 20, shadowColor: "#000",
           shadowOffset: { width: 2, height: 0 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 5,
@@ -135,71 +135,71 @@ export default function CustomDrawer({ isOpen, onClose, navigation, currentScree
 
         <View className="flex-1 space-y-2">
           <TouchableOpacity
-            className={`flex-row items-center px-3 py-2.5 rounded-xl ${currentScreen === 'Home' ? 'bg-[#ce9d7d]' : ''}`}
+            className={`flex-row items-center px-2 py-2.5 rounded-xl ${currentScreen === 'Home' ? 'bg-[#ce9d7d]' : ''}`}
             onPress={() => handleNavigate('Home')}
           >
             <MaterialIcons name="timer" size={22} color={currentScreen === 'Home' ? '#ffffff' : '#5a413c'} />
-            <Text className={`ml-4 font-semibold text-[15px] ${currentScreen === 'Home' ? 'text-[#ffffff]' : 'text-[#5a413c]'}`}>Focus</Text>
+            <Text className={`ml-3 font-semibold text-[15px] ${currentScreen === 'Home' ? 'text-[#ffffff]' : 'text-[#5a413c]'}`}>Focus</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            className={`flex-row items-center px-3 py-2.5 rounded-xl ${currentScreen === 'Tasks' ? 'bg-[#ce9d7d]' : ''}`}
+            className={`flex-row items-center px-2 py-2.5 rounded-xl ${currentScreen === 'Tasks' ? 'bg-[#ce9d7d]' : ''}`}
             onPress={() => handleNavigate('Tasks')}
           >
             <MaterialIcons name="checklist" size={22} color={currentScreen === 'Tasks' ? '#ffffff' : '#5a413c'} />
-            <Text className={`ml-4 font-semibold text-[15px] ${currentScreen === 'Tasks' ? 'text-[#ffffff]' : 'text-[#5a413c]'}`}>Tasks</Text>
+            <Text className={`ml-3 font-semibold text-[15px] ${currentScreen === 'Tasks' ? 'text-[#ffffff]' : 'text-[#5a413c]'}`}>Tasks</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            className={`flex-row items-center px-3 py-2.5 rounded-xl ${currentScreen === 'Bookshelf' ? 'bg-[#ce9d7d]' : ''}`}
+            className={`flex-row items-center px-2 py-2.5 rounded-xl ${currentScreen === 'Bookshelf' ? 'bg-[#ce9d7d]' : ''}`}
             onPress={() => handleNavigate('Bookshelf')}
           >
             <MaterialIcons name="auto-stories" size={22} color={currentScreen === 'Bookshelf' ? '#ffffff' : '#5a413c'} />
-            <Text className={`ml-4 font-semibold text-[15px] ${currentScreen === 'Bookshelf' ? 'text-[#ffffff]' : 'text-[#5a413c]'}`}>Bookshelf</Text>
+            <Text className={`ml-3 font-semibold text-[15px] ${currentScreen === 'Bookshelf' ? 'text-[#ffffff]' : 'text-[#5a413c]'}`}>Bookshelf</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            className={`flex-row items-center px-3 py-2.5 rounded-xl ${currentScreen === 'Calendar' ? 'bg-[#ce9d7d]' : ''}`}
+            className={`flex-row items-center px-2 py-2.5 rounded-xl ${currentScreen === 'Calendar' ? 'bg-[#ce9d7d]' : ''}`}
             onPress={() => handleNavigate('Calendar')}
           >
             <MaterialIcons name="calendar-today" size={22} color={currentScreen === 'Calendar' ? '#ffffff' : '#5a413c'} />
-            <Text className={`ml-4 font-semibold text-[15px] ${currentScreen === 'Calendar' ? 'text-[#ffffff]' : 'text-[#5a413c]'}`}>Calendar</Text>
+            <Text className={`ml-3 font-semibold text-[15px] ${currentScreen === 'Calendar' ? 'text-[#ffffff]' : 'text-[#5a413c]'}`}>Calendar</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            className={`flex-row items-center px-3 py-2.5 rounded-xl ${currentScreen === 'Statistics' ? 'bg-[#ce9d7d]' : ''}`}
+            className={`flex-row items-center px-2 py-2.5 rounded-xl ${currentScreen === 'Statistics' ? 'bg-[#ce9d7d]' : ''}`}
             onPress={() => handleNavigate('Statistics')}
           >
             <MaterialIcons name="leaderboard" size={22} color={currentScreen === 'Statistics' ? '#ffffff' : '#5a413c'} />
-            <Text className={`ml-4 font-semibold text-[15px] ${currentScreen === 'Statistics' ? 'text-[#ffffff]' : 'text-[#5a413c]'}`}>Statistics</Text>
+            <Text className={`ml-3 font-semibold text-[15px] ${currentScreen === 'Statistics' ? 'text-[#ffffff]' : 'text-[#5a413c]'}`}>Statistics</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            className={`flex-row items-center px-3 py-2.5 rounded-xl ${currentScreen === 'Groups' ? 'bg-[#ce9d7d]' : ''}`}
+            className={`flex-row items-center px-2 py-2.5 rounded-xl ${currentScreen === 'Groups' ? 'bg-[#ce9d7d]' : ''}`}
             onPress={() => handleNavigate('Groups')}
           >
             <MaterialIcons name="groups" size={22} color={currentScreen === 'Groups' ? '#ffffff' : '#5a413c'} />
-            <Text className={`ml-4 font-semibold text-[15px] ${currentScreen === 'Groups' ? 'text-[#ffffff]' : 'text-[#5a413c]'}`}>Groups</Text>
+            <Text className={`ml-3 font-semibold text-[15px] ${currentScreen === 'Groups' ? 'text-[#ffffff]' : 'text-[#5a413c]'}`}>Groups</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            className={`flex-row items-center px-3 py-2.5 rounded-xl ${currentScreen === 'Store' ? 'bg-[#ce9d7d]' : ''}`}
+            className={`flex-row items-center px-2 py-2.5 rounded-xl ${currentScreen === 'Store' ? 'bg-[#ce9d7d]' : ''}`}
             onPress={() => handleNavigate('Store')}
           >
             <MaterialIcons name="store" size={22} color={currentScreen === 'Store' ? '#ffffff' : '#5a413c'} />
-            <Text className={`ml-4 font-semibold text-[15px] ${currentScreen === 'Store' ? 'text-[#ffffff]' : 'text-[#5a413c]'}`}>Store</Text>
+            <Text className={`ml-3 font-semibold text-[15px] ${currentScreen === 'Store' ? 'text-[#ffffff]' : 'text-[#5a413c]'}`}>Store</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            className={`flex-row items-center px-3 py-2.5 rounded-xl ${currentScreen === 'Settings' ? 'bg-[#ce9d7d]' : ''}`}
+            className={`flex-row items-center px-2 py-2.5 rounded-xl ${currentScreen === 'Settings' ? 'bg-[#ce9d7d]' : ''}`}
             onPress={() => handleNavigate('Settings')}
           >
             <MaterialIcons name="settings" size={22} color={currentScreen === 'Settings' ? '#ffffff' : '#5a413c'} />
-            <Text className={`ml-4 font-semibold text-[15px] ${currentScreen === 'Settings' ? 'text-[#ffffff]' : 'text-[#5a413c]'}`}>Settings</Text>
+            <Text className={`ml-3 font-semibold text-[15px] ${currentScreen === 'Settings' ? 'text-[#ffffff]' : 'text-[#5a413c]'}`}>Settings</Text>
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity className="flex-row items-center px-3 py-4 mb-8 border-t border-[#e4e2e2]" onPress={handleLogout}>
+        <TouchableOpacity className="flex-row items-center px-2 py-4 mb-8 border-t border-[#e4e2e2]" onPress={handleLogout}>
           <MaterialIcons name="logout" size={22} color="#ba1a1a" />
           <Text className="ml-3 font-bold text-[15px] text-[#ba1a1a]">Log out</Text>
         </TouchableOpacity>

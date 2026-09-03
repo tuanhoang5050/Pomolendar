@@ -282,7 +282,7 @@ export default function BookshelfScreen({ navigation }) {
             </View>
           </View>
           <View className="flex-row gap-2">
-            <TouchableOpacity className="w-10 h-10 items-center justify-center active:opacity-80">
+            <TouchableOpacity className="w-10 h-10 items-center justify-center active:opacity-80" onPress={() => navigation.navigate('Leaderboard')}>
               <MaterialIcons name="leaderboard" size={22} color="#eda87a" />
             </TouchableOpacity>
             <TouchableOpacity className="w-10 h-10 items-center justify-center active:opacity-80" onPress={openDailyTasks}>
@@ -441,7 +441,7 @@ export default function BookshelfScreen({ navigation }) {
               <MaterialIcons name="close" size={20} color="#c89d7d" />
             </TouchableOpacity>
           </View>
-          <View className="px-6 py-6 pb-12 flex-col gap-4">
+          <View className="px-2 py-6 pb-12 flex-col gap-4">
             <View className="bg-[#ffffff] border border-[#e4e2e2] rounded-xl p-4 shadow-sm flex-row items-center justify-between">
               <View className="flex-row items-center gap-4 flex-1 pr-4">
                 <View className="w-12 h-12 items-center justify-center">

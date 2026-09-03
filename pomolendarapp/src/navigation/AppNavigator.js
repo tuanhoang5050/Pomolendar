@@ -19,6 +19,7 @@ import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import ResetPasswordScreen from '../screens/ResetPasswordScreen';
 import GroupsScreen from '../screens/GroupsScreen';
 import GroupDetailScreen from '../screens/GroupDetailScreen';
+import LeaderboardScreen from '../screens/LeaderboardScreen';
 
 import { configureNotificationChannel, requestNotificationPermissions } from '../services/notifications';
 
@@ -69,6 +70,7 @@ export default function AppNavigator() {
         <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
         <Stack.Screen name="Groups" component={GroupsScreen} />
         <Stack.Screen name="GroupDetail" component={GroupDetailScreen} />
+        <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

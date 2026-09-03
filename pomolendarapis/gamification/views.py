@@ -1,4 +1,4 @@
-from django.db import transaction
+from django.db import transaction, models
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.views import APIView
@@ -34,6 +34,46 @@ class ActivityLogListView(APIView):
             for log in logs
         ]
         return Response(data)
+
+
+class GlobalLeaderboardAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        top_profiles = UserProfile.objects.select_related('user').order_by('-books_collected', '-knowledge_points')[
+            :100]
+
+        leaderboard = []
+        for idx, p in enumerate(top_profiles):
+            leaderboard.append({
+                "rank": idx + 1,
+                "user_id": str(p.user.id),
+                "name": p.user.name,
+                "avatar": p.user.avatar.url if p.user.avatar else None,
+                "books_collected": p.books_collected,
+                "knowledge_points": p.knowledge_points
+            })
+
+        current_profile = UserProfile.objects.get(user=request.user)
+        higher_users_count = UserProfile.objects.filter(
+            models.Q(books_collected__gt=current_profile.books_collected) |
+            models.Q(books_collected=current_profile.books_collected,
+                     knowledge_points__gt=current_profile.knowledge_points)
+        ).count()
+
+        current_user_data = {
+            "rank": higher_users_count + 1,
+            "user_id": str(request.user.id),
+            "name": request.user.name,
+            "avatar": request.user.avatar.url if request.user.avatar else None,
+            "books_collected": current_profile.books_collected,
+            "knowledge_points": current_profile.knowledge_points
+        }
+
+        return Response({
+            "leaderboard": leaderboard,
+            "current_user": current_user_data
+        }, status=status.HTTP_200_OK)
 
 
 class StoreAPIView(APIView):
