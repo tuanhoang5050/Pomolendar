@@ -11,7 +11,7 @@ Built with Python and Django REST Framework, this directory contains the core bu
 * **accounts/**: Manages user authentication (JWT-based), Google OAuth integration, password recovery via OTP, and user profile data.
 * **planner/**: The core productivity engine. It handles CRUD operations for Tasks and Fixed Events, contains the auto-scheduling algorithm (utilizing Max-Heap and Fractional Bin Packing concepts), and logs Pomodoro focus sessions.
 * **gamification/**: Manages the application's economy. It tracks Knowledge Points for permanent level progression (Bookshelf) and virtual currency (Coins) for purchasing items in the Store. It also powers the Global Leaderboard API.
-* **teams/**: Facilitates study groups. It manages group creation, invite code validation, real-time focus status synchronization across members, and group-specific leaderboards.
+* **teams/**: Facilitates study groups. It manages group creation, invite code validation, periodic focus status synchronization across members, and group-specific leaderboards.
 
 ### Frontend (pomolendarapp/)
 Built with React Native and Expo, styled with Tailwind CSS (NativeWind).
@@ -24,22 +24,25 @@ Built with React Native and Expo, styled with Tailwind CSS (NativeWind).
 * **Backend:** Python, Django, Django REST Framework, MySQL, Cloudinary
 * **Frontend:** React Native, Expo, Tailwind CSS, Axios, React Navigation
 
+> **Note:** The Deep Focus feature (app-blocking during a session) relies on Android-specific system permissions (Display over other apps, Usage Access) and currently has no iOS equivalent. As a result, setup and build instructions below target Android.
+
 ## Installation & Local Setup
 
 ### Prerequisites
 * Python 3.10+
 * Node.js 18+
 * Expo CLI
+* Android Studio (Android SDK installed, `ANDROID_HOME` environment variable configured)
+* JDK 17 (or the version required by your installed Expo SDK)
+* A connected Android device with USB debugging enabled, or a running Android emulator (AVD)
 
 ### 1. Backend Setup
 Navigate to the backend directory and set up the Python environment:
-```bash
 ```bash
 cd pomolendarapis
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
 ```
 
 Create a **`.env`** file in the **`pomolendarapis`** directory with your database credentials, Cloudinary keys, and Django secret key, then run the server:
@@ -48,42 +51,38 @@ Create a **`.env`** file in the **`pomolendarapis`** directory with your databas
 python manage.py makemigrations
 python manage.py migrate
 python manage.py runserver
-
 ```
 
 The API will be available at **`http://localhost:8000`**.
 
-**2. Frontend Setup**
+### 2. Frontend Setup
 
 ```bash
 cd pomolendarapp
 npm install
-
 ```
 
 Update your API base URL in **`src/services/api.js`** to point to your local backend IP address, then start the application:
 
 ```bash
 npx expo run:android
-
 ```
 
-*(Use your Android virtual device or USB Debugging)*
+*(Make sure your Android device or emulator is connected and ready before running this command)*
 
-**Usage Guide**
+## Usage Guide
 
-* **Authentication:** Create an account via email or Google OAuth. First-time daily logins reward you with bonus Knowledge Points.
+* **Authentication:** Create an account via email or Google OAuth.
 * **Task Planning & Auto-Scheduling:** Add your Fixed Events and Tasks. Press the **"Auto-Schedule"** button to allow the Heuristic algorithm to arrange your tasks into your available free time slots.
-* **Focus Sessions:** Tap on a scheduled task to start a Pomodoro timer. The app activates Deep Focus mode. Completing a session rewards you with Knowledge Points (for leveling up) and Coins (for store purchases).
+* **Focus Sessions:** Tap a scheduled task to select it, then press **Start** to begin the Pomodoro timer. You can separately enable **Deep Focus mode** to block distracting apps while focusing — it does not turn on automatically. Completing a session rewards you with Knowledge Points, which contribute to leveling up on your Bookshelf.
 * **Gamification & Customization:** Visit the Bookshelf to view your accumulated levels. Use the Store to spend Coins on custom animations or ambient sounds. View your ranking against other users on the Global Leaderboard.
-* **Study Groups:** Create a private group or join an existing one using an invite code. When you start a focus session, your status instantly updates to **"Focusing"** for all other group members.
+* **Study Groups:** Create a private group or join an existing one using an invite code. While you're focusing, your status is periodically synced so other group members can see you as **"Focusing"**.
 
-**Credits & Acknowledgements**
+## Credits & Acknowledgements
 
 This project is an academic thesis developed entirely for educational purposes. Built upon the foundation of various open-source technologies, the system was created by referencing, learning from, and drawing inspiration from technical documentation and several outstanding productivity platforms:
 * **Application Inspiration:** The core time-management mechanics, gamification concepts, and UI/UX design were heavily inspired by existing productivity applications, notably **Strive** and **Focus To-Do**.
 * **Visual Assets:** The vector animations used within the gamification store and the focus timer interfaces are sourced from **LottieFiles** (lottiefiles.com).
 * **Open Source Community:** Special thanks to the maintainers of **React Native**, **Expo**, **Django**, and the developers of the numerous open-source libraries that made this system possible.
-* 
 
 All source code developed by me in this repository is released under the [MIT License](LICENSE)—anyone is free to download, reference, modify, and use it. I do not claim ownership or hold copyright over the original ideas, methodologies (e.g., the Pomodoro technique), referenced UI/UX designs, or any third-party digital assets (such as LottieFiles animations and icons) integrated into this application.
