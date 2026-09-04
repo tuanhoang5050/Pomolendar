@@ -80,8 +80,10 @@ npx expo run:android
 
 **Credits & Acknowledgements**
 
-This project was built upon the foundation of various open-source technologies and drew inspiration from several outstanding productivity platforms:
-
+This project is an academic thesis developed entirely for educational purposes. Built upon the foundation of various open-source technologies, the system was created by referencing, learning from, and drawing inspiration from technical documentation and several outstanding productivity platforms:
 * **Application Inspiration:** The core time-management mechanics, gamification concepts, and UI/UX design were heavily inspired by existing productivity applications, notably **Strive** and **Focus To-Do**.
 * **Visual Assets:** The vector animations used within the gamification store and the focus timer interfaces are sourced from **LottieFiles** (lottiefiles.com).
 * **Open Source Community:** Special thanks to the maintainers of **React Native**, **Expo**, **Django**, and the developers of the numerous open-source libraries that made this system possible.
+* 
+
+All source code developed by me in this repository is released under the [MIT License](LICENSE)—anyone is free to download, reference, modify, and use it. I do not claim ownership or hold copyright over the original ideas, methodologies (e.g., the Pomodoro technique), referenced UI/UX designs, or any third-party digital assets (such as LottieFiles animations and icons) integrated into this application.
